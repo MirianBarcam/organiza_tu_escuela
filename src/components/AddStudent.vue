@@ -1,12 +1,34 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
-const props = defineProps({ cuotas: Array })
+const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+const props = defineProps({ cuotas: Array, horarios: Array })
 const emit = defineEmits(['add'])
 
 const name = ref('')
 const selectedCuotas = ref([])
+const selectedHorarios = ref([])
 const dropdownOpen = ref(false)
+
+watch(() => props.cuotas, (val) => {
+  if (val.length && !selectedCuotas.value.length) {
+    selectedCuotas.value = [val[0].id]
+  }
+}, { immediate: true })
+
+function horarioLabel(h) {
+  return `${DAYS[h.day]} ${h.startTime}–${h.endTime}`
+}
+
+function toggleHorario(id) {
+  const idx = selectedHorarios.value.indexOf(id)
+  if (idx === -1) {
+    selectedHorarios.value.push(id)
+  } else {
+    selectedHorarios.value.splice(idx, 1)
+  }
+}
 
 function toggleCuota(id) {
   const idx = selectedCuotas.value.indexOf(id)
@@ -33,9 +55,15 @@ function closeDropdown(e) {
 
 function submit() {
   if (!name.value.trim() || !selectedCuotas.value.length) return
-  emit('add', { name: name.value.trim(), cuotaIds: [...selectedCuotas.value] })
+  const data = {
+    name: name.value.trim(),
+    cuotaIds: [...selectedCuotas.value],
+    horarioIds: [...selectedHorarios.value]
+  }
+  emit('add', data)
   name.value = ''
-  selectedCuotas.value = []
+  selectedCuotas.value = props.cuotas.length ? [props.cuotas[0].id] : []
+  selectedHorarios.value = []
   dropdownOpen.value = false
 }
 </script>
@@ -81,6 +109,18 @@ function submit() {
             <span class="dropdown-detail">{{ c.price.toFixed(2) }}€</span>
           </li>
         </ul>
+      </div>
+
+      <div v-if="horarios.length" class="horario-chips">
+        <label
+          v-for="h in horarios"
+          :key="h.id"
+          class="horario-chip"
+          :class="{ 'horario-chip--active': selectedHorarios.includes(h.id) }"
+          @click="toggleHorario(h.id)"
+        >
+          {{ horarioLabel(h) }}
+        </label>
       </div>
     </div>
 
@@ -250,6 +290,29 @@ function submit() {
 .add-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.horario-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.horario-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.horario-chip--active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
 }
 
 .hint {

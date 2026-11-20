@@ -2,18 +2,28 @@
 import { ref, computed } from 'vue'
 import { useFirestore } from './composables/useFirestore.js'
 import { getAdjustedPrice } from './composables/usePricing.js'
+import PinLock from './components/PinLock.vue'
 import MonthSelector from './components/MonthSelector.vue'
 import StudentList from './components/StudentList.vue'
 import AddStudent from './components/AddStudent.vue'
 import CuotaManager from './components/CuotaManager.vue'
 import HolidayManager from './components/HolidayManager.vue'
+import HorarioManager from './components/HorarioManager.vue'
+import GastosView from './components/GastosView.vue'
+import PaymentLog from './components/PaymentLog.vue'
 
 const { data: cuotas, loaded: cuotasLoaded } = useFirestore('cuotas', [])
 const { data: students, loaded: studentsLoaded } = useFirestore('students', [])
 const { data: payments, loaded: paymentsLoaded } = useFirestore('payments', {})
 const { data: holidays, loaded: holidaysLoaded } = useFirestore('holidays', {})
+const { data: horarios, loaded: horariosLoaded } = useFirestore('horarios', [])
+const { data: pistaSettings, loaded: pistaSettingsLoaded } = useFirestore('pistaSettings', { pricePerHour: 10 })
+const { data: paymentLogs, loaded: logsLoaded } = useFirestore('paymentLogs', [])
 
-const allLoaded = computed(() => cuotasLoaded.value && studentsLoaded.value && paymentsLoaded.value && holidaysLoaded.value)
+const allLoaded = computed(() =>
+  cuotasLoaded.value && studentsLoaded.value && paymentsLoaded.value &&
+  holidaysLoaded.value && horariosLoaded.value && pistaSettingsLoaded.value && logsLoaded.value
+)
 
 const tab = ref('pagos')
 
@@ -32,18 +42,33 @@ function getStudentPrice(student) {
   )
 }
 
+// --- Cuotas ---
 function addCuota(cuota) {
   cuotas.value.push({ id: Date.now().toString(36), ...cuota })
 }
-
 function removeCuota(id) {
   cuotas.value = cuotas.value.filter(c => c.id !== id)
 }
 
+// --- Horarios ---
+function addHorario(h) {
+  horarios.value.push({ id: Date.now().toString(36), ...h })
+  horarios.value = [...horarios.value]
+}
+function removeHorario(id) {
+  horarios.value = horarios.value.filter(h => h.id !== id)
+}
+
+// --- Students ---
 function addStudent(data) {
   students.value.push({ id: Date.now().toString(36), ...data })
 }
-
+function updateStudent(updated) {
+  const idx = students.value.findIndex(s => s.id === updated.id)
+  if (idx === -1) return
+  students.value[idx] = { ...students.value[idx], ...updated }
+  students.value = [...students.value]
+}
 function removeStudent(id) {
   students.value = students.value.filter(s => s.id !== id)
   const cleaned = { ...payments.value }
@@ -54,17 +79,48 @@ function removeStudent(id) {
   payments.value = cleaned
 }
 
-function togglePayment(studentId) {
+// --- Payments ---
+function paymentStatus(studentId) {
+  return payments.value[currentMonth.value]?.[studentId] || false
+}
+
+function payStudent({ id, method }) {
   const month = currentMonth.value
   if (!payments.value[month]) payments.value[month] = {}
-  payments.value[month][studentId] = !payments.value[month][studentId]
+  payments.value[month][id] = method
   payments.value = { ...payments.value }
+
+  const student = students.value.find(s => s.id === id)
+  paymentLogs.value = [{
+    studentId: id,
+    studentName: student?.name || '?',
+    month,
+    action: 'paid',
+    method,
+    amount: getStudentPrice(student),
+    timestamp: new Date().toISOString()
+  }, ...paymentLogs.value]
 }
 
-function isPaid(studentId) {
-  return !!payments.value[currentMonth.value]?.[studentId]
+function unpayStudent(id) {
+  const month = currentMonth.value
+  if (!payments.value[month]) return
+  payments.value[month][id] = false
+  payments.value = { ...payments.value }
+
+  const student = students.value.find(s => s.id === id)
+  paymentLogs.value = [{
+    studentId: id,
+    studentName: student?.name || '?',
+    month,
+    action: 'unpaid',
+    method: null,
+    amount: null,
+    timestamp: new Date().toISOString()
+  }, ...paymentLogs.value]
 }
 
+// --- Holidays ---
 function toggleHoliday(date) {
   const month = currentMonth.value
   const current = holidays.value[month] || []
@@ -76,19 +132,31 @@ function toggleHoliday(date) {
   holidays.value = { ...holidays.value }
 }
 
+// --- Summary ---
 const summary = computed(() => {
   const total = students.value.length
-  const paid = students.value.filter(s => isPaid(s.id)).length
+  const paidStudents = students.value.filter(s => paymentStatus(s.id))
+  const paid = paidStudents.length
   const totalAmount = students.value.reduce((sum, s) => sum + getStudentPrice(s), 0)
-  const paidAmount = students.value.filter(s => isPaid(s.id)).reduce((sum, s) => sum + getStudentPrice(s), 0)
-  return { total, paid, pending: total - paid, totalAmount, paidAmount, pendingAmount: totalAmount - paidAmount }
+  const paidAmount = paidStudents.reduce((sum, s) => sum + getStudentPrice(s), 0)
+  const bizumStudents = paidStudents.filter(s => paymentStatus(s.id) === 'bizum')
+  const efectivoStudents = paidStudents.filter(s => paymentStatus(s.id) === 'efectivo')
+  return {
+    total, paid, pending: total - paid,
+    totalAmount, paidAmount, pendingAmount: totalAmount - paidAmount,
+    bizumCount: bizumStudents.length,
+    efectivoCount: efectivoStudents.length,
+    bizumAmount: bizumStudents.reduce((sum, s) => sum + getStudentPrice(s), 0),
+    efectivoAmount: efectivoStudents.reduce((sum, s) => sum + getStudentPrice(s), 0)
+  }
 })
 </script>
 
 <template>
+  <PinLock>
   <div class="app">
     <header class="header">
-      <h1>🎾 Organiza tu Escuela</h1>
+      <h1>🎾 Organiza tu Escuela 🎾</h1>
       <p class="subtitle">Control de pagos de pádel</p>
     </header>
 
@@ -98,19 +166,14 @@ const summary = computed(() => {
     </div>
 
     <nav v-else class="tabs">
-      <button
-        class="tab"
-        :class="{ 'tab--active': tab === 'pagos' }"
-        @click="tab = 'pagos'"
-      >Pagos</button>
-      <button
-        class="tab"
-        :class="{ 'tab--active': tab === 'ajustes' }"
-        @click="tab = 'ajustes'"
-      >Ajustes</button>
+      <button class="tab" :class="{ 'tab--active': tab === 'pagos' }" @click="tab = 'pagos'">Pagos</button>
+      <button class="tab" :class="{ 'tab--active': tab === 'gastos' }" @click="tab = 'gastos'">Gastos</button>
+      <button class="tab" :class="{ 'tab--active': tab === 'historial' }" @click="tab = 'historial'">Historial</button>
+      <button class="tab" :class="{ 'tab--active': tab === 'ajustes' }" @click="tab = 'ajustes'">Ajustes</button>
     </nav>
 
     <main v-if="!allLoaded"></main>
+
     <main class="main" v-else-if="tab === 'pagos'">
       <MonthSelector v-model="currentMonth" />
 
@@ -129,19 +192,51 @@ const summary = computed(() => {
         </div>
       </div>
 
-      <AddStudent :cuotas="cuotas" @add="addStudent" />
+      <div v-if="summary.paid > 0" class="method-summary">
+        <span v-if="summary.bizumCount" class="method-tag method-tag--bizum">Bizum: {{ summary.bizumCount }}</span>
+        <span v-if="summary.efectivoCount" class="method-tag method-tag--efectivo">Efectivo: {{ summary.efectivoCount }}</span>
+      </div>
+
+      <AddStudent :cuotas="cuotas" :horarios="horarios" @add="addStudent" />
 
       <StudentList
         :students="students"
         :cuotas="cuotas"
-        :is-paid="isPaid"
+        :horarios="horarios"
+        :payment-status="paymentStatus"
         :get-price="getStudentPrice"
-        @toggle="togglePayment"
+        @pay="payStudent"
+        @unpay="unpayStudent"
+        @edit="updateStudent"
         @remove="removeStudent"
       />
     </main>
 
+    <main class="main" v-else-if="tab === 'gastos'">
+      <MonthSelector v-model="currentMonth" />
+      <GastosView
+        :horarios="horarios"
+        :pista-settings="pistaSettings"
+        :month="currentMonth"
+        :holidays="monthHolidays"
+        :paid-income="summary.paidAmount"
+        :bizum-amount="summary.bizumAmount"
+        :efectivo-amount="summary.efectivoAmount"
+      />
+    </main>
+
+    <main class="main" v-else-if="tab === 'historial'">
+      <MonthSelector v-model="currentMonth" />
+      <PaymentLog :logs="paymentLogs.filter(l => l.month === currentMonth)" />
+    </main>
+
     <main class="main" v-else>
+      <HorarioManager
+        :horarios="horarios"
+        @add="addHorario"
+        @remove="removeHorario"
+      />
+
       <CuotaManager
         :cuotas="cuotas"
         @add="addCuota"
@@ -158,6 +253,7 @@ const summary = computed(() => {
       />
     </main>
   </div>
+  </PinLock>
 </template>
 
 <style scoped>
@@ -245,6 +341,29 @@ const summary = computed(() => {
 
 .card--pending .card__number {
   color: var(--color-unpaid-text);
+}
+
+.method-summary {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.method-tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+}
+
+.method-tag--bizum {
+  background: #ede9fe;
+  color: #6b21a8;
+}
+
+.method-tag--efectivo {
+  background: var(--color-paid);
+  color: var(--color-paid-text);
 }
 
 .loading {

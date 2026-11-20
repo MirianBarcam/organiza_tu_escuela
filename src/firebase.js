@@ -2,13 +2,13 @@ import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBX7MJDOzoAV0QzvtWHoLbi9wjyKoHZIn4",
-  authDomain: "organizatuescuela.firebaseapp.com",
-  projectId: "organizatuescuela",
-  storageBucket: "organizatuescuela.firebasestorage.app",
-  messagingSenderId: "79251310471",
-  appId: "1:79251310471:web:0edb21d5097ebf14b63522",
-  measurementId: "G-JTRT54R810"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 }
 
 const app = initializeApp(firebaseConfig)

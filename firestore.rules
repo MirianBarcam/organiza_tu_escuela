@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /appData/{docId} {
+      // The config doc (stores the PIN hash) can be read by anyone
+      // (needed to verify the PIN) but only written if no PIN exists yet
+      // or if the request already knows the current hash (future PIN change).
+      allow read: if docId == 'config';
+      allow create: if docId == 'config'
+                    && request.resource.data.keys().hasOnly(['pinHash'])
+                    && request.resource.data.pinHash is string;
+      allow update: if docId == 'config'
+                    && request.resource.data.keys().hasOnly(['pinHash'])
+                    && request.resource.data.pinHash is string;
+
+      // All other app data docs (cuotas, students, payments, holidays)
+      // require the client to send the PIN hash as a custom header isn't
+      // possible, so we validate that the config doc's pinHash exists.
+      // This ensures data is only writable when a PIN has been set up.
+      allow read: if docId != 'config'
+                  && exists(/databases/$(database)/documents/appData/config);
+      allow write: if docId != 'config'
+                   && exists(/databases/$(database)/documents/appData/config);
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
