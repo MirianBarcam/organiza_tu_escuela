@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { getWeekdayDates } from '../composables/usePricing.js'
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
@@ -11,10 +11,14 @@ const props = defineProps({
   holidays: Array,
   paidIncome: Number,
   bizumAmount: Number,
-  efectivoAmount: Number
+  efectivoAmount: Number,
+  extras: Array
 })
 
-const emit = defineEmits(['update:pistaSettings'])
+const emit = defineEmits(['update:pistaSettings', 'addExtra', 'removeExtra'])
+
+const newExtraName = ref('')
+const newExtraPrice = ref('')
 
 function duration(start, end) {
   const [sh, sm] = start.split(':').map(Number)
@@ -82,11 +86,26 @@ const dayGroups = computed(() => {
   return groups
 })
 
-const totalGastos = computed(() =>
+const totalPistas = computed(() =>
   dayGroups.value.reduce((sum, g) => sum + g.totalCost, 0)
 )
 
+const totalExtras = computed(() =>
+  (props.extras || []).reduce((sum, e) => sum + (e.price || 0), 0)
+)
+
+const totalGastos = computed(() => totalPistas.value + totalExtras.value)
+
 const balance = computed(() => props.paidIncome - totalGastos.value)
+
+function submitExtra() {
+  const name = newExtraName.value.trim()
+  const price = parseFloat(newExtraPrice.value)
+  if (!name || isNaN(price) || price <= 0) return
+  emit('addExtra', { name, price })
+  newExtraName.value = ''
+  newExtraPrice.value = ''
+}
 
 function dayNumber(dateStr) {
   return parseInt(dateStr.split('-')[2])
@@ -102,7 +121,7 @@ function dayNumber(dateStr) {
       </div>
       <div class="bcard bcard--expense">
         <span class="bcard__number">{{ totalGastos.toFixed(2) }}€</span>
-        <span class="bcard__label">Pistas</span>
+        <span class="bcard__label">Gastos</span>
       </div>
       <div class="bcard" :class="balance >= 0 ? 'bcard--positive' : 'bcard--negative'">
         <span class="bcard__number">{{ balance >= 0 ? '+' : '' }}{{ balance.toFixed(2) }}€</span>
@@ -180,6 +199,40 @@ function dayNumber(dateStr) {
           {{ dayNumber(date) }}
         </span>
       </div>
+    </div>
+
+    <!-- Otros gastos -->
+    <div class="extras-section">
+      <div class="extras-header">
+        <strong>Otros gastos</strong>
+        <span v-if="extras.length" class="extras-total">{{ totalExtras.toFixed(2) }}€</span>
+      </div>
+
+      <div v-if="extras.length" class="extras-list">
+        <div v-for="e in extras" :key="e.id" class="extra-row">
+          <span class="extra-name">{{ e.name }}</span>
+          <span class="extra-price">{{ e.price.toFixed(2) }}€</span>
+          <button class="extra-remove" @click="$emit('removeExtra', e.id)">×</button>
+        </div>
+      </div>
+
+      <form class="extra-form" @submit.prevent="submitExtra">
+        <input
+          v-model="newExtraName"
+          type="text"
+          placeholder="Ej: Cajón de bolas"
+          class="extra-input extra-input--name"
+        />
+        <input
+          v-model="newExtraPrice"
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="€"
+          class="extra-input extra-input--price"
+        />
+        <button type="submit" class="extra-add">+</button>
+      </form>
     </div>
   </div>
 </template>
@@ -398,5 +451,120 @@ function dayNumber(dateStr) {
   background: var(--color-danger);
   color: white;
   text-decoration: line-through;
+}
+
+.extras-section {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+}
+
+.extras-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.extras-total {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-unpaid-text);
+}
+
+.extras-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.extra-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--color-bg);
+  border-radius: calc(var(--radius) / 2);
+}
+
+.extra-name {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.extra-price {
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.extra-remove {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.extra-remove:hover {
+  background: var(--color-danger);
+  color: white;
+}
+
+.extra-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.extra-input {
+  font-size: 0.85rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) / 2);
+  outline: none;
+  font-family: inherit;
+}
+
+.extra-input:focus {
+  border-color: var(--color-primary);
+}
+
+.extra-input--name {
+  flex: 1;
+  min-width: 0;
+}
+
+.extra-input--price {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.extra-add {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.extra-add:hover {
+  background: var(--color-primary-hover);
 }
 </style>

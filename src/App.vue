@@ -19,10 +19,11 @@ const { data: holidays, loaded: holidaysLoaded } = useFirestore('holidays', {})
 const { data: horarios, loaded: horariosLoaded } = useFirestore('horarios', [])
 const { data: pistaSettings, loaded: pistaSettingsLoaded } = useFirestore('pistaSettings', { pricePerHour: 10 })
 const { data: paymentLogs, loaded: logsLoaded } = useFirestore('paymentLogs', [])
+const { data: extras, loaded: extrasLoaded } = useFirestore('extras', {})
 
 const allLoaded = computed(() =>
   cuotasLoaded.value && studentsLoaded.value && paymentsLoaded.value &&
-  holidaysLoaded.value && horariosLoaded.value && pistaSettingsLoaded.value && logsLoaded.value
+  holidaysLoaded.value && horariosLoaded.value && pistaSettingsLoaded.value && logsLoaded.value && extrasLoaded.value
 )
 
 const tab = ref('pagos')
@@ -132,6 +133,22 @@ function toggleHoliday(date) {
   holidays.value = { ...holidays.value }
 }
 
+// --- Extras ---
+const monthExtras = computed(() => extras.value[currentMonth.value] || [])
+
+function addExtra(item) {
+  const month = currentMonth.value
+  if (!extras.value[month]) extras.value[month] = []
+  extras.value[month].push({ id: Date.now().toString(36), ...item })
+  extras.value = { ...extras.value }
+}
+
+function removeExtra(id) {
+  const month = currentMonth.value
+  extras.value[month] = (extras.value[month] || []).filter(e => e.id !== id)
+  extras.value = { ...extras.value }
+}
+
 // --- Summary ---
 const summary = computed(() => {
   const total = students.value.length
@@ -222,6 +239,9 @@ const summary = computed(() => {
         :paid-income="summary.paidAmount"
         :bizum-amount="summary.bizumAmount"
         :efectivo-amount="summary.efectivoAmount"
+        :extras="monthExtras"
+        @add-extra="addExtra"
+        @remove-extra="removeExtra"
       />
     </main>
 
