@@ -1,9 +1,19 @@
 <script setup>
-defineProps({
+const props = defineProps({
   students: Array,
-  isPaid: Function
+  cuotas: Array,
+  isPaid: Function,
+  getPrice: Function
 })
 defineEmits(['toggle', 'remove'])
+
+function getCuotaNames(student) {
+  return (student.cuotaIds || [])
+    .map(id => props.cuotas.find(c => c.id === id))
+    .filter(Boolean)
+    .map(c => c.name)
+    .join(' + ') || '—'
+}
 </script>
 
 <template>
@@ -25,10 +35,15 @@ defineEmits(['toggle', 'remove'])
           @click="$emit('toggle', student.id)"
           :title="isPaid(student.id) ? 'Marcar como no pagado' : 'Marcar como pagado'"
         >
-          {{ isPaid(student.id) ? '✓' : '✗' }}
+          {{ isPaid(student.id) ? '✓' : '💰' }}
         </button>
 
-        <span class="student__name">{{ student.name }}</span>
+        <div class="student__info">
+          <span class="student__name">{{ student.name }}</span>
+          <span class="student__cuota">{{ getCuotaNames(student) }}</span>
+        </div>
+
+        <span class="student__price">{{ getPrice(student).toFixed(2) }}€</span>
 
         <span class="student__badge" :class="isPaid(student.id) ? 'badge--paid' : 'badge--unpaid'">
           {{ isPaid(student.id) ? 'Pagado' : 'Pendiente' }}
@@ -105,18 +120,37 @@ defineEmits(['toggle', 'remove'])
   color: var(--color-unpaid-text);
 }
 
-.student__name {
+.student__info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.student__name {
   font-weight: 500;
 }
 
-.student__badge {
+.student__cuota {
   font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.student__price {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.student__badge {
+  font-size: 0.7rem;
   font-weight: 600;
-  padding: 0.25rem 0.6rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .badge--paid {
